@@ -79,6 +79,66 @@ div[data-baseweb="slider"] *{
   border: 1px solid rgba(120,120,120,0.20);
   background: rgba(255,255,255,0.55);
 }
+
+/* Luxury alternative cards (mobile friendly, no horizontal scroll) */
+.alt-card{
+  border-radius: 20px;
+  padding: 16px 16px 14px 16px;
+  border: 1px solid rgba(120,120,120,0.22);
+  background: rgba(255,255,255,0.62);
+  box-shadow: 0 10px 26px rgba(0,0,0,0.06);
+  margin: 10px 0 14px 0;
+}
+.alt-head{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
+}
+.alt-title{
+  font-size:18px;
+  font-weight:800;
+}
+.alt-score{
+  font-size:13px;
+  opacity:0.85;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(120,120,120,0.22);
+  background: rgba(250,250,250,0.6);
+  white-space: nowrap;
+}
+.alt-mini{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.alt-row{
+  display:grid;
+  grid-template-columns: 120px 1fr;
+  gap:10px;
+  align-items:start;
+}
+.alt-k{
+  font-size:12px;
+  opacity:0.75;
+  line-height:1.35;
+}
+.alt-v{
+  font-size:13px;
+  line-height:1.55;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+@media (prefers-color-scheme: dark) {
+  .alt-card{ background: rgba(22,22,28,0.72); border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 10px 26px rgba(0,0,0,0.28); }
+  .alt-score{ border: 1px solid rgba(255,255,255,0.12); background: rgba(40,40,52,0.55); }
+}
+@media (max-width: 520px){
+  .alt-row{ grid-template-columns: 98px 1fr; }
+  .alt-title{ font-size:17px; }
+}
 @media (prefers-color-scheme: dark) {
   .kpi-card { background: rgba(30,30,30,0.55); border: 1px solid rgba(255,255,255,0.12); }
 }
@@ -707,6 +767,78 @@ def _render_kpi_cards(alt_rows: pd.DataFrame):
             </div>
             """, unsafe_allow_html=True)
 
+
+def _md_to_html_lines(md_text: str) -> str:
+    """Convert simple markdown-ish lines (used in weights detail) into safe HTML lines."""
+    if not md_text:
+        return ""
+    lines = [ln.strip() for ln in str(md_text).splitlines() if ln.strip()]
+    out = []
+    for ln in lines:
+        ln = ln.lstrip("- ").strip()
+        ln = (
+            ln.replace("&", "&amp;")
+              .replace("<", "&lt;")
+              .replace(">", "&gt;")
+        )
+        out.append(ln)
+    return "<br>".join(out)
+
+
+def _render_alt_card(rr: dict, idx: int):
+    """Render one alternative as a compact, mobile-friendly 'mini table' card."""
+    title = rr.get("חלופה", f"חלופה {idx}")
+    score = rr.get("score", np.nan)
+    advantage = rr.get("יתרון", "")
+    managers = rr.get("מנהלים", "")
+    tracks = rr.get("מסלולים", "")
+    weights_detail = _md_to_html_lines(rr.get("משקלים (פירוט)", ""))
+
+    def _fmt_pct(x):
+        try:
+            return f"{float(x):.2f}%"
+        except Exception:
+            return "—"
+
+    def _fmt_num(x, fmt="{:.2f}"):
+        try:
+            return fmt.format(float(x))
+        except Exception:
+            return "—"
+
+    exposure_line = " · ".join([
+        f"חו״ל: {_fmt_pct(rr.get('חו״ל (%)'))}",
+        f"ישראל: {_fmt_pct(rr.get('ישראל (%)'))}",
+        f"מניות: {_fmt_pct(rr.get('מניות (%)'))}",
+        f"מט״ח: {_fmt_pct(rr.get('מט״ח (%)'))}",
+        f"לא־סחיר: {_fmt_pct(rr.get('לא־סחיר (%)'))}",
+    ])
+
+    metrics_line = " · ".join([
+        f"שארפ: {_fmt_num(rr.get('שארפ משוקלל'), '{:.2f}')}",
+        f"שירות: {_fmt_num(rr.get('שירות משוקלל'), '{:.1f}')}",
+    ])
+
+    score_str = "—" if (score is None or (isinstance(score, float) and np.isnan(score))) else f"{float(score):.4f}"
+
+    html = f"""
+    <div class=\"alt-card\">
+      <div class=\"alt-head\">
+        <div class=\"alt-title\">{title}</div>
+        <div class=\"alt-score\">Score&nbsp;{score_str}</div>
+      </div>
+      <div class=\"alt-mini\">
+        <div class=\"alt-row\"><div class=\"alt-k\">חלוקה</div><div class=\"alt-v\">{weights_detail or '—'}</div></div>
+        <div class=\"alt-row\"><div class=\"alt-k\">מנהלים</div><div class=\"alt-v\">{managers}</div></div>
+        <div class=\"alt-row\"><div class=\"alt-k\">מסלולים</div><div class=\"alt-v\">{tracks}</div></div>
+        <div class=\"alt-row\"><div class=\"alt-k\">חשיפות</div><div class=\"alt-v\">{exposure_line}</div></div>
+        <div class=\"alt-row\"><div class=\"alt-k\">מדדים</div><div class=\"alt-v\">{metrics_line}</div></div>
+        <div class=\"alt-row\"><div class=\"alt-k\">יתרון</div><div class=\"alt-v\">{advantage}</div></div>
+      </div>
+    </div>
+    """
+    st.markdown(html, unsafe_allow_html=True)
+
 # ----------------------------
 # Tab 1: Inputs (main, not sidebar)
 # ----------------------------
@@ -837,54 +969,12 @@ with tab2:
         # KPI cards
         _render_kpi_cards(top3)
 
-        st.markdown("#### טבלה מלאה")
+        st.markdown("#### פירוט לכל חלופה")
         st.caption(st.session_state.get("last_note", ""))
 
-        # Column order and wider "קופות"/"מסלולים"
-        cols_order = [
-            "חלופה", "יתרון",
-            "מנהלים", "קופות", "מסלולים", "weights",
-            "חו״ל (%)", "ישראל (%)", "מניות (%)", "מט״ח (%)", "לא־סחיר (%)",
-            "שארפ משוקלל", "שירות משוקלל", "score",
-        ]
-        for c in cols_order:
-            if c not in top3.columns:
-                top3[c] = np.nan
-        view = top3[cols_order].copy()
-
-        # Expand weight labels
-        def _weights_str(w):
-            if isinstance(w, (tuple, list)):
-                return " / ".join([f"{int(x)}%" for x in w])
-            return str(w)
-        view["משקלים"] = view["weights"].apply(_weights_str)
-        view = view.drop(columns=["weights"])
-        # nicer score name
-        view = view.rename(columns={"score": "Score (סטייה)"})
-
-        # Conditional flags for quick reading
-        # We avoid heavy Styler; we add emoji columns
-        ill_max = float(st.session_state["targets"].get("illiquid", 20.0))
-        view["חריג לא־סחיר"] = np.where(view["לא־סחיר (%)"].to_numpy() > ill_max + 1e-9, "🔴", "")
-        # score thresholds
-        view["סטייה גבוהה"] = np.where(view["Score (סטייה)"].to_numpy() > 0.08, "🟠", "")
-
-        # Make text columns first and wider
-        column_config = {
-            "קופות": st.column_config.TextColumn(width="large"),
-            "מסלולים": st.column_config.TextColumn(width="large"),
-            "מנהלים": st.column_config.TextColumn(width="medium"),
-            "יתרון": st.column_config.TextColumn(width="large"),
-            "חלופה": st.column_config.TextColumn(width="medium"),
-        }
-        # תצוגה ידידותית לנייד: פירוט חלוקה/תוצאות במקום טבלה רחבה
-        for _, rr in view.iterrows():
-            st.markdown(f"### {rr.get('חלופה','חלופה')} ")
-            if rr.get('משקלים (פירוט)'):
-                st.markdown(rr['משקלים (פירוט)'])
-            st.markdown(f"**מנהלים:** {rr.get('מנהלים','')}  ")
-            st.markdown(f"**יתרון:** {rr.get('יתרון','')}  ")
-            st.markdown('---')
+        # Render each alternative as a compact mini-table card (mobile friendly)
+        for i, rr in enumerate(top3.to_dict(orient="records"), start=1):
+            _render_alt_card(rr, i)
 
 # ----------------------------
 # Tab 3: Transparency
